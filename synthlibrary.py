@@ -35,19 +35,19 @@ MISO = 36
 MOSI = 38
 CS = (40,26)
 
-VOLUME_MULTIPLIER = .3 #Number between 0 and 1
+VOLUME_MULTIPLIER = .5 #Number between 0 and 1
 semitone_adjustment = 1
 
 parameters = {
-	'H1' : 1.00,
-	'H2' : 1.00,
-	'H3' : 1.00,
-	'H4' : 1.00,
-	'H5' : 1.00,
-	'H6' : 1.00,
-	'H7' : 1.00,
-	'H8' : 1.00,
-	'H9' : 1.00,
+	'H01' : 1.00,
+	'H02' : 1.00,
+	'H03' : 1.00,
+	'H04' : 1.00,
+	'H05' : 1.00,
+	'H06' : 1.00,
+	'H07' : 1.00,
+	'H08' : 1.00,
+	'H09' : 1.00,
 	'H10' : 1.00,
 	'H11' : 1.00,
 	'H12' : 1.00,
@@ -55,18 +55,18 @@ parameters = {
 	'H14' : 1.00,
 	'H15' : 1.00,
 	'H16' : 1.00,
-	'centerFreq' : 1.00,
-	'Q' : 1.00,
-	'filterMix' : 1.00,
-	'attack' : 1.00,
-	'sustain' : 1.00,
-	'release' : 1.00,
-	'LFOAmpRate' : 1.00,
-	'LFOAmpDepth' : 1.00,
-	'LFOPitchRate' : 1.00,
-	'LFOPitchDepth' : 1.00,
-	'reverbDecay' : 1.00,
-	'reverbMix' : 1.00,
+	'centerFreq' : 0.00,
+	'Q' : 0.00,
+	'filterMix' : 0.00,
+	'attack' : 0.00,
+	'sustain' : 0.00,
+	'release' : 0.00,
+	'LFOAmpRate' : 0.00,
+	'LFOAmpDepth' : 0.00,
+	'LFOPitchRate' : 0.00,
+	'LFOPitchDepth' : 0.00,
+	'reverbDecay' : 0.00,
+	'reverbMix' : 0.00,
 }
 sortedParameterKeys = sorted(parameters)
 
@@ -132,7 +132,8 @@ class StationBrain(object):
 					#print("i'm connected to the card, and there will be a light on.")
 					if try_read is False:
 						if pn532.read_passive_target() != uid:
-							try_read = True
+							#print("new card detected; reading parameters")
+							self.readFromCard(uid)
 							continue
 						self.cardwriter.writeToCard(uid)
 					elif try_read is True:
@@ -186,7 +187,9 @@ class StationBrain(object):
 			if tmpdata is None:
 				print('Failed to read block ',block,'!')
 			else:
-				parameters[key] = tmpdata[:tmpdata.find("#")]
+				tmpdata = tmpdata[:tmpdata.find("#")]
+				parameters[key] = tmpdata
+				libpd_float(key, float(tmpdata))
 			i += 1
 
 class StationCardWriter(object):
