@@ -3,19 +3,16 @@ import time
 import RPi.GPIO as GPIO
 import signal
 import threading
-import os
-import sys
-sys.path.append(os.path.abspath("/home/pi/SYNTHSPEX"))
 from synthlibrary import *
 
 #Important variables are being set here. 
-STATION_NUMBER = int(sys.argv[1])
-print("Station {0} is active!".format(STATION_NUMBER))
+#STATION_NUMBER = 1
+#print("Station {0} is active!".format(STATION_NUMBER))
 ALIVE = True
 PATCH = 'SynthEngine15.pd'
 
 signal.signal(signal.SIGINT, end_read)
-
+ 
 #Set up GPIO.
 GPIO.setwarnings(False)
 GPIObuttonpins = [37]
@@ -30,12 +27,9 @@ for button in GPIObuttonpins:
 	GPIO.setup(button,GPIO.IN,pull_up_down=GPIO.PUD_UP)
 	GPIO.add_event_detect(button, GPIO.FALLING, callback=button_push, bouncetime=100)
 
-
-
 #Set up PD Wrapper.
 libpd_open_patch(PATCH, '.')
-
-print STATION_NUMBER
+'''
 if STATION_NUMBER == 1:
 	pass
 elif STATION_NUMBER == 2:
@@ -92,6 +86,7 @@ elif STATION_NUMBER == 6:
 	inputreverbMix = GetAnalogInput(1, "reverbMix", 1)
 elif STATION_NUMBER == 7:
 	pass
+'''
 
 #Define the classes that control the Station.
 #StationFeedback handles visual feedback. Optional first argument defines number of Status LED.
@@ -105,12 +100,7 @@ elif STATION_NUMBER == 7:
 #Optional StationCardWriter() instance, defaults to "CardWriter."
 Feedback = StationFeedback()
 CardWriter = StationCardWriter()
-Station = StationBrain(STATION_NUMBER, Feedback, CardWriter)
-
-#Define all analog inputs here. GetAnalogInput takes 4 arguments:
-#Pin number 0-7 (or 0-15 for Stations with second MCP3008).
-#Name of PD Receive object. Upper limit of input range. Optional debug flag to print values to console.
-
+Station = StationBrain(1, Feedback, CardWriter)
 
 while stream.is_active() and ALIVE:
 	time.sleep(2)
