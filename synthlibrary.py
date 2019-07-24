@@ -7,6 +7,7 @@ import signal
 import threading
 import subprocess
 import Adafruit_PN532 as PN532
+import Adafruit_GPIO.SPI as SPI
 from ctypes import *
 from contextlib import contextmanager
 import os
@@ -31,10 +32,10 @@ def noalsaerr():
 
 try_read = True
 try_write = False
-CLK = 32
-MISO = 36
-MOSI = 38
-CS = (40,26)
+CLK = 23
+MISO = 21
+MOSI = 23
+CS = (13,15)
 
 R = 0
 G = 0
@@ -46,21 +47,21 @@ semitone_adjustment = 1
 
 parameters = {
 	'H01' : 1.00,
-	'H02' : 1.00,
-	'H03' : 1.00,
-	'H04' : 1.00,
-	'H05' : 1.00,
-	'H06' : 1.00,
-	'H07' : 1.00,
-	'H08' : 1.00,
-	'H09' : 1.00,
-	'H10' : 1.00,
-	'H11' : 1.00,
-	'H12' : 1.00,
-	'H13' : 1.00,
-	'H14' : 1.00,
-	'H15' : 1.00,
-	'H16' : 1.00,
+	'H02' : 0.60,
+	'H03' : 0.00,
+	'H04' : 0.00,
+	'H05' : 0.00,
+	'H06' : 0.00,
+	'H07' : 0.00,
+	'H08' : 0.00,
+	'H09' : 0.00,
+	'H10' : 0.00,
+	'H11' : 0.00,
+	'H12' : 0.00,
+	'H13' : 0.00,
+	'H14' : 0.00,
+	'H15' : 0.00,
+	'H16' : 0.00,
 	'centerFreq' : 0.00,
 	'Q' : 0.00,
 	'filterMix' : 0.00,
@@ -74,9 +75,10 @@ parameters = {
 	'reverbDecay' : 0.00,
 	'reverbMix' : 0.00,
 }
-sortedParameterKeys = sorted(parameters)
+sortedParameterKeys = sorted(parameters, key=str.lower)
 
-pn532 = PN532.PN532(12, 22, 16, 18)
+#pn532 = PN532.PN532(12, 22, 16, 18)
+pn532 = PN532.PN532(12, spi=SPI.SpiDev(1, 0))
 pn532.begin()
 pn532.SAM_configuration()
 
@@ -117,7 +119,7 @@ class GetAnalogInput(object):
 class StationBrain(object):
 	def __init__(self, stationnumber, feedback="Feedback", cardwriter="CardWriter"):
 		global parameters
-		self.stationnumber = stationnumber
+		self.stationnumber = int(stationnumber)
 		self.feedback = feedback
 		self.cardwriter = cardwriter
 		self.paramString = ''
@@ -131,7 +133,7 @@ class StationBrain(object):
 		timeout_delay = 5
 		check_uid = True
 		tmp_timeout = timeout_delay
-		if self.stationnumber is not 1:
+		if self.stationnumber != 1:
 			while True:
 				#print ("i'm trying to read a card!")
 				uid = pn532.read_passive_target()
@@ -154,11 +156,11 @@ class StationBrain(object):
 						self.cardwriter.writeToCard(uid)
 					elif try_read is True:
 						self.readRGB(uid)
+						self.readFromCard(uid)
 						if self.feedback.status == True:
 							self.feedback.jumpToRGB()
 						else:
-							self.feedback.up()
-						self.readFromCard(uid)
+							self.feedback.Initialize = True	
 						try_read = False
 				elif tmp_timeout > 0:
 					#print(tmp_timeout)
@@ -167,7 +169,7 @@ class StationBrain(object):
 				else:
 					#print("back to default parameters!")
 					if self.feedback.status is True:
-						self.feedback.down()
+						self.feedback.Deinitialize = True
 					try_read = True
 					tmp_timeout = timeout_delay
 				time.sleep(.7)
@@ -190,7 +192,7 @@ class StationBrain(object):
 						write_RGB = False
 					self.cardwriter.writeToCard(uid)
 					if self.feedback.status is False and pn532.read_passive_target():
-						self.feedback.up()
+						self.feedback.Initialize = True
 					#print write_RGB
 				elif tmp_timeout > 0:
 					#print(tmp_timeout)
@@ -202,7 +204,7 @@ class StationBrain(object):
 					#print("back to default parameters!")
 					#print(tmp_timeout)
 					if self.feedback.status is True:
-						self.feedback.down()
+						elf.feedback.Deinitialize = True
 					write_RGB = True
 					tmp_timeout = timeout_delay
 				time.sleep(.7)
@@ -297,13 +299,20 @@ class StationFeedback(object):
 		self.BLUEStatus.start(0)
 		self.status = False
 		self.RGB = ''
+		self.triggerInitialize = False
+		self.triggerDeinitialize = False
 		thread = threading.Thread(target=self.run, args=())
 		thread.daemon = True
 		thread.start()
 
 	def run(self):
 		while True:
-			time.sleep(1)
+			if self.triggerInitialize == True:
+				self.triggerInitialize = False
+				self.up()
+			if self.triggerDeinitialize == True:
+				self.triggerDeinitialize = False
+				self.down()
 
 	def up(self):
 		global VOLUME_MULTIPLIER, R, G, B

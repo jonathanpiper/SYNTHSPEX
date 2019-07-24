@@ -3,11 +3,12 @@ import time
 import RPi.GPIO as GPIO
 import signal
 import threading
+import sys
 from synthlibrary import *
 
 #Important variables are being set here. 
-#STATION_NUMBER = 1
-#print("Station {0} is active!".format(STATION_NUMBER))
+STATION_NUMBER = int(sys.argv[1])
+print("Station {0} is active!".format(STATION_NUMBER))
 ALIVE = True
 PATCH = 'SynthEngine15.pd'
 
@@ -29,7 +30,7 @@ for button in GPIObuttonpins:
 
 #Set up PD Wrapper.
 libpd_open_patch(PATCH, '.')
-'''
+
 if STATION_NUMBER == 1:
 	pass
 elif STATION_NUMBER == 2:
@@ -86,7 +87,6 @@ elif STATION_NUMBER == 6:
 	inputreverbMix = GetAnalogInput(1, "reverbMix", 1)
 elif STATION_NUMBER == 7:
 	pass
-'''
 
 #Define the classes that control the Station.
 #StationFeedback handles visual feedback. Optional first argument defines number of Status LED.
@@ -100,7 +100,7 @@ elif STATION_NUMBER == 7:
 #Optional StationCardWriter() instance, defaults to "CardWriter."
 Feedback = StationFeedback()
 CardWriter = StationCardWriter()
-Station = StationBrain(1, Feedback, CardWriter)
+Station = StationBrain(STATION_NUMBER, Feedback, CardWriter)
 
 while stream.is_active() and ALIVE:
 	time.sleep(2)
