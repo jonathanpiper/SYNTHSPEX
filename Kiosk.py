@@ -18,24 +18,21 @@ signal.signal(signal.SIGINT, end_read)
 
 #Set up GPIO.
 GPIO.setwarnings(False)
-GPIObuttonpins = [37]
+GPIObuttonpins = [16]
 
 def button_push(button):
-	if button == 37:
+	if button == 16:
 		print ('You triggered a note!')
 		libpd_bang('pyin_play')
 	return
 
 for button in GPIObuttonpins:
 	GPIO.setup(button,GPIO.IN,pull_up_down=GPIO.PUD_UP)
-	GPIO.add_event_detect(button, GPIO.FALLING, callback=button_push, bouncetime=100)
-
-
+	GPIO.add_event_detect(button, GPIO.FALLING, callback=button_push, bouncetime=300)
 
 #Set up PD Wrapper.
 libpd_open_patch(PATCH, '.')
 
-print STATION_NUMBER
 if STATION_NUMBER == 1:
 	pass
 elif STATION_NUMBER == 2:

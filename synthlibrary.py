@@ -11,6 +11,7 @@ from ctypes import *
 from contextlib import contextmanager
 import os
 import sys
+import random
 FNULL = open(os.devnull, 'w')
 sys.path.insert(0, '/usr/local/lib/python2.7/dist-packages')
 subprocess.call(["amixer", "sset", "'Speaker'", "0%"], stdout=FNULL)
@@ -30,31 +31,36 @@ def noalsaerr():
 
 try_read = True
 try_write = False
-CLK = 32
-MISO = 36
-MOSI = 38
-CS = (40,26)
+CLK = 36
+MISO = 38
+MOSI = 40
+CS = (22,32)
 
-VOLUME_MULTIPLIER = .5 #Number between 0 and 1
+R = 0
+G = 0
+B = 0
+RGB_BLOCK = 60
+
+VOLUME_MULTIPLIER = 1 #Number between 0 and 1
 semitone_adjustment = 1
 
 parameters = {
 	'H01' : 1.00,
-	'H02' : 1.00,
-	'H03' : 1.00,
-	'H04' : 1.00,
-	'H05' : 1.00,
-	'H06' : 1.00,
-	'H07' : 1.00,
-	'H08' : 1.00,
-	'H09' : 1.00,
-	'H10' : 1.00,
-	'H11' : 1.00,
-	'H12' : 1.00,
-	'H13' : 1.00,
-	'H14' : 1.00,
-	'H15' : 1.00,
-	'H16' : 1.00,
+	'H02' : 0.60,
+	'H03' : 0.00,
+	'H04' : 0.00,
+	'H05' : 0.00,
+	'H06' : 0.00,
+	'H07' : 0.00,
+	'H08' : 0.00,
+	'H09' : 0.00,
+	'H10' : 0.00,
+	'H11' : 0.00,
+	'H12' : 0.00,
+	'H13' : 0.00,
+	'H14' : 0.00,
+	'H15' : 0.00,
+	'H16' : 0.00,
 	'centerFreq' : 0.00,
 	'Q' : 0.00,
 	'filterMix' : 0.00,
@@ -70,7 +76,7 @@ parameters = {
 }
 sortedParameterKeys = sorted(parameters)
 
-pn532 = PN532.PN532(12, 22, 16, 18)
+pn532 = PN532.PN532(24, 23, 19, 21)
 pn532.begin()
 pn532.SAM_configuration()
 
@@ -115,30 +121,44 @@ class StationBrain(object):
 		self.feedback = feedback
 		self.cardwriter = cardwriter
 		self.paramString = ''
+		self.uid = ''
 		thread = threading.Thread(target=self.run, args=())
 		thread.daemon = True
 		thread.start()
 
 	def run(self):
-		global try_read, STATUS_LED, CARD_KEY
-		timeout_delay = 5
+		global try_read, STATUS_LED, CARD_KEY, R, G, B
+		timeout_delay = 2
+		check_uid = True
 		tmp_timeout = timeout_delay
 		if self.stationnumber is not 1:
 			while True:
 				#print ("i'm trying to read a card!")
 				uid = pn532.read_passive_target()
+				if uid and check_uid:
+					check_uid = False
+					self.uid = uid
 				if uid is not None:
 					tmp_timeout = timeout_delay
 					#print("i'm connected to the card, and there will be a light on.")
 					if try_read is False:
-						if pn532.read_passive_target() != uid:
-							#print("new card detected; reading parameters")
-							self.readFromCard(uid)
+						if pn532.read_passive_target() != self.uid:
+							check_uid = True
+							try_read = True
+							print("new card detected; reading parameters")
+							continue
+							#self.readRGB(uid)
+							#self.feedback.jumpToRGB()
+							#self.readFromCard(uid)
 							continue
 						self.cardwriter.writeToCard(uid)
 					elif try_read is True:
+						self.readRGB(uid)
+						if self.feedback.status == True:
+							self.feedback.jumpToRGB()
+						else:
+							self.feedback.up()
 						self.readFromCard(uid)
-						self.feedback.up()
 						try_read = False
 				elif tmp_timeout > 0:
 					#print(tmp_timeout)
@@ -150,47 +170,77 @@ class StationBrain(object):
 						self.feedback.down()
 					try_read = True
 					tmp_timeout = timeout_delay
-				time.sleep(.7)
+				time.sleep(.5)
 		else:
+			write_RGB = True
 			while True:
 				uid = pn532.read_passive_target()
 				if uid is not None:
 					#print uid
 					tmp_timeout = timeout_delay
-					#print("i'm connected to the card, and there will be a light on.")
+					#print("i'm connected to the card, and there will be a light on.")								
+					if write_RGB == False:
+						continue
+					elif write_RGB == True:
+						stringRGB = self.feedback.generateRGB()
+						self.cardwriter.writeRGB(uid, stringRGB)
+						if self.feedback.status is True:
+							self.feedback.jumpToRGB()
+						write_RGB = False
 					self.cardwriter.writeToCard(uid)
-					if self.feedback.status is False:
+					if self.feedback.status is False and pn532.read_passive_target():
 						self.feedback.up()
+					#print write_RGB
 				elif tmp_timeout > 0:
 					#print(tmp_timeout)
 					#print("i can't find any cards. i'm going to reset to default parameters in " + str(tmp_timeout*2) + " seconds.")
 					tmp_timeout -= 1
+					write_RGB = True
+					continue
 				else:
 					#print("back to default parameters!")
 					#print(tmp_timeout)
 					if self.feedback.status is True:
 						self.feedback.down()
-					try_read = True
+					write_RGB = True
 					tmp_timeout = timeout_delay
-				time.sleep(.7)
+				time.sleep(.5)
 	
 	def readFromCard(self, uid):
 		global parameters, sortedParameterKeys
 		i = 0
+		tmpdict = {}
 		for key in sortedParameterKeys:
 			sector = int(floor(i/3))
 			block = i % 3
 			computedblock = ((sector+1)*4) + block
-			pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B,
-												[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
+			pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
 			tmpdata = pn532.mifare_classic_read_block(computedblock)
 			if tmpdata is None:
-				print('Failed to read block ',block,'!')
+				print('Failed to read block {0}!'.format(computedblock))
+				break
 			else:
 				tmpdata = tmpdata[:tmpdata.find("#")]
-				parameters[key] = tmpdata
-				libpd_float(key, float(tmpdata))
+				tmpdict[key] = float(tmpdata)
+				#libpd_float(key, float(tmpdata))
 			i += 1
+		for i in range (0, 10):
+			for key in tmpdict:
+				delta = parameters[key] - tmpdict[key]
+				parameters[key] -= delta / 10
+				libpd_float(key, float(parameters[key]))
+				time.sleep(.01)
+
+	def readRGB(self, uid):
+		global R, G, B, RGB_BLOCK
+		pn532.mifare_classic_authenticate_block(uid, RGB_BLOCK, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
+		tmpdata = pn532.mifare_classic_read_block(RGB_BLOCK)
+		#print tmpdata
+		if tmpdata is not None:
+			R = float(tmpdata[0:4])
+			G = float(tmpdata[4:8])
+			B = float(tmpdata[8:12])
+		#print('i just read {0}, {1}, {2}'.format(R, G, B))			
 
 class StationCardWriter(object):
 	def __init__(self):
@@ -209,23 +259,37 @@ class StationCardWriter(object):
 			sector = int(floor(i/3))
 			block = i % 3
 			computedblock = ((sector+1)*4) + block
-			writedata = str(parameters[key]).ljust(16,'#')
+			writedata = str(round(parameters[key], 14)).ljust(16,'#')
 			#print writedata
 			#time.sleep(.1)
-			if not pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B,
-												CARD_KEY):
-				print('Authorization for block {0} failed.'.format(computedblock))
+			pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
 			if not pn532.mifare_classic_write_block(computedblock, writedata):
 				print('Error! Failed to write to block {0}.'.format(computedblock))
+				break
 			i += 1
 
+	def writeRGB(self, uid, RGB):
+		global RGB_BLOCK
+		pn532.mifare_classic_authenticate_block(uid, RGB_BLOCK, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
+		if not pn532.mifare_classic_write_block(RGB_BLOCK, RGB):
+			print('Error! Failed to write to block 60.')			
+
 class StationFeedback(object):
-	def __init__(self, LEDpin=29):
-		self.LEDpin = LEDpin
-		GPIO.setup(self.LEDpin, GPIO.OUT)
-		self.ledStatus = GPIO.PWM(self.LEDpin, 100)
-		self.ledStatus.start(0)
+	def __init__(self, RED=29,GREEN=31,BLUE=33):
+		self.RED = RED
+		self.GREEN = GREEN
+		self.BLUE = BLUE
+		GPIO.setup(self.RED, GPIO.OUT)
+		GPIO.setup(self.GREEN, GPIO.OUT)
+		GPIO.setup(self.BLUE, GPIO.OUT)
+		self.REDStatus = GPIO.PWM(self.RED, 100)
+		self.GREENStatus = GPIO.PWM(self.GREEN, 100)
+		self.BLUEStatus = GPIO.PWM(self.BLUE, 100)
+		self.REDStatus.start(0)
+		self.GREENStatus.start(0)
+		self.BLUEStatus.start(0)
 		self.status = False
+		self.RGB = ''
 		thread = threading.Thread(target=self.run, args=())
 		thread.daemon = True
 		thread.start()
@@ -235,22 +299,43 @@ class StationFeedback(object):
 			time.sleep(1)
 
 	def up(self):
-		global VOLUME_MULTIPLIER
+		global VOLUME_MULTIPLIER, R, G, B
+		#libpd_bang('pyin_play')
 		for i in range (0, 101, 2):
 			volume = str(i*VOLUME_MULTIPLIER) + "%"
 			subprocess.call(["amixer", "sset", "'Speaker'", volume], stdout=FNULL)
-			self.ledStatus.ChangeDutyCycle(i)
-			self.status = True
+			self.REDStatus.ChangeDutyCycle(i*R)
+			self.GREENStatus.ChangeDutyCycle(i*G)
+			self.BLUEStatus.ChangeDutyCycle(i*B)
+			#print("lights at {0}, {1}, {2}".format((i*R), (i*G), i*B))
 			time.sleep(.01)
+		self.status = True
 
 	def down(self):
-		global VOLUME_MULTIPLIER
+		global VOLUME_MULTIPLIER, R, G, B
+		self.status = False
 		for i in range (100, -1, -2):
 			volume = str(i*VOLUME_MULTIPLIER) + "%"
 			subprocess.call(["amixer", "sset", "'Speaker'", volume], stdout=FNULL)
-			self.ledStatus.ChangeDutyCycle(i)
-			self.status = False
-			time.sleep(.03)	
+			self.REDStatus.ChangeDutyCycle(i*R)
+			self.GREENStatus.ChangeDutyCycle(i*G)
+			self.BLUEStatus.ChangeDutyCycle(i*B)
+			#print("lights at {0}, {1}, {2}".format((i*R), (i*G), i*B))
+			time.sleep(.01)	
+
+	def generateRGB(self):
+		global R, G, B
+		R = round(random.random(),2)
+		G = round(random.random(),2)
+		B = round(random.random(),2)
+		self.RGB = "{:.2f}".format(R) + "{:.2f}".format(G) + "{:.2f}".format(B)
+		return self.RGB.ljust(16, "#")
+
+	def jumpToRGB(self):
+		global R, G, B
+		self.REDStatus.ChangeDutyCycle(100*R)
+		self.GREENStatus.ChangeDutyCycle(100*G)
+		self.BLUEStatus.ChangeDutyCycle(100*B)
 
 def readadc(adcnum, clockpin, mosipin, misopin, cspin):
 	if ((adcnum > 7) or (adcnum < 0)):
@@ -308,20 +393,6 @@ def pdin(*s):
 	global parameters
 	#print("pd just said that {0} is {1}".format(s[0], s[1]))
 	parameters[s[0]] = s[1]
-'''
-	if s[0] == 'pyout_frequency':
-		frequency = round(s[1],2)
-		#print('PD just reported that the current frequency is ' + str(s[1]) + '!')
-	elif s[0] == 't1':
-		f = s[1]
-		print f
-	elif s[0] == 'A':
-		f = s[1]
-		print f
-	elif s[0] == 'D':
-		f = s[1]
-		print f
-		'''
 
 with noalsaerr():
 	p  = pyaudio.PyAudio()
