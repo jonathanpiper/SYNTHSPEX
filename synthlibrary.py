@@ -382,7 +382,7 @@ def end_read(signal,frame):
 	ALIVE = False
 	stream.close()
 	p.terminate()
-	libpd_release()
+	libpd_release()		
 	print "Ctrl+C captured, quitting."
 
 def pd_callback(in_data,frame_count,time_info,status):
