@@ -102,6 +102,7 @@ class GetAnalogInput(object):
 		thread.start()
 
 	def run(self):
+		global parameters
 		while True:
 			newValue = fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000) * self.scale
 			if newValue == 0:
@@ -111,6 +112,7 @@ class GetAnalogInput(object):
 					self.value = newValue
 			if self.debug:
 				print("Input {0} has value {1}".format(self.control, self.value))
+			parameters[self.control] = self.value
 			libpd_float(self.control, float(self.value))
 			time.sleep(.05)
 
@@ -146,7 +148,6 @@ class StationBrain(object):
 							check_uid = True
 							try_read = True
 							print("new card detected; reading parameters")
-							continue
 							#self.readRGB(uid)
 							#self.feedback.jumpToRGB()
 							#self.readFromCard(uid)
@@ -178,13 +179,11 @@ class StationBrain(object):
 				if uid is not None:
 					#print uid
 					tmp_timeout = timeout_delay
-					#print("i'm connected to the card, and there will be a light on.")								
-					if write_RGB == False:
-						continue
-					elif write_RGB == True:
+					#print("i'm connected to the card, and there will be a light on.")
+					if write_RGB:
 						stringRGB = self.feedback.generateRGB()
 						self.cardwriter.writeRGB(uid, stringRGB)
-						if self.feedback.status is True:
+						if self.feedback.status:
 							self.feedback.jumpToRGB()
 						write_RGB = False
 					self.cardwriter.writeToCard(uid)
@@ -224,6 +223,8 @@ class StationBrain(object):
 				tmpdict[key] = float(tmpdata)
 				#libpd_float(key, float(tmpdata))
 			i += 1
+		print("reading")
+		print(tmpdict)
 		for i in range (0, 10):
 			for key in tmpdict:
 				delta = parameters[key] - tmpdict[key]
@@ -240,21 +241,15 @@ class StationBrain(object):
 			R = float(tmpdata[0:4])
 			G = float(tmpdata[4:8])
 			B = float(tmpdata[8:12])
-		#print('i just read {0}, {1}, {2}'.format(R, G, B))			
+		#print('i just read {0}, {1}, {2}'.format(R, G, B))
+
 
 class StationCardWriter(object):
-	def __init__(self):
-		thread = threading.Thread(target=self.run, args=())
-		thread.daemon = True
-		thread.start()
-	
-	def run(self):
-		while True:
-			time.sleep(1)
 
 	def writeToCard(self, uid):
 		global parameters, sortedParameterKeys
 		i = 0
+		print("writing")
 		for key in sortedParameterKeys:
 			sector = int(floor(i/3))
 			block = i % 3
@@ -262,6 +257,7 @@ class StationCardWriter(object):
 			writedata = str(round(parameters[key], 14)).ljust(16,'#')
 			#print writedata
 			#time.sleep(.1)
+			print("write", writedata)
 			pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
 			if not pn532.mifare_classic_write_block(computedblock, writedata):
 				print('Error! Failed to write to block {0}.'.format(computedblock))
@@ -290,13 +286,6 @@ class StationFeedback(object):
 		self.BLUEStatus.start(0)
 		self.status = False
 		self.RGB = ''
-		thread = threading.Thread(target=self.run, args=())
-		thread.daemon = True
-		thread.start()
-
-	def run(self):
-		while True:
-			time.sleep(1)
 
 	def up(self):
 		global VOLUME_MULTIPLIER, R, G, B
