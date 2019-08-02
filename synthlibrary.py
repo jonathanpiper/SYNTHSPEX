@@ -45,6 +45,8 @@ VOLUME_MULTIPLIER = 1 #Number between 0 and 1
 semitone_adjustment = 1
 
 parameters = {
+	'freq' : 1.00,
+	'amp' : 1.00,
 	'H01' : 1.00,
 	'H02' : 0.60,
 	'H03' : 0.00,
@@ -76,6 +78,19 @@ parameters = {
 }
 sortedParameterKeys = sorted(parameters)
 
+station1Parameters = [	'freq', 'amp' ]
+station1Blocks = [ 4 ]
+station2Parameters = [	'H01', 'H02', 'H03', 'H04', 'H05', 'H06', 'H07', 'H08', 'H09', 'H10', 'H11', 'H12', 'H13', 'H14', 'H15', 'H16' ]
+station2Blocks = [ 5, 6, 8, 9 ]
+station3Parameters = [	'centerFreq', 'Q', 'filterMix' ]
+station3Blocks = [ 10 ]
+station4Parameters = [	'attack', 'release' ]
+station4Blocks = [ 12 ]
+station5Parameters = [	'LFOAmpRate', 'LFOAmpDepth', 'LFOPitchRate', 'LFOPitchDepth' ]
+station5Blocks = [ 13 ]
+station6Parameters = [	'reverbDecay', 'reverbMix' ]
+station6Blocks = [ 14 ]
+
 pn532 = PN532.PN532(24, 23, 19, 21)
 pn532.begin()
 pn532.SAM_configuration()
@@ -102,6 +117,7 @@ class GetAnalogInput(object):
 		thread.start()
 
 	def run(self):
+		global parameters
 		while True:
 			newValue = fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000) * self.scale
 			if newValue == 0:
@@ -111,6 +127,7 @@ class GetAnalogInput(object):
 					self.value = newValue
 			if self.debug:
 				print("Input {0} has value {1}".format(self.control, self.value))
+			parameters[self.control] = self.value
 			libpd_float(self.control, float(self.value))
 			time.sleep(.05)
 
@@ -131,6 +148,8 @@ class StationBrain(object):
 		timeout_delay = 2
 		check_uid = True
 		tmp_timeout = timeout_delay
+		stationParameters = eval("station" + str(self.stationnumber) + "Parameters")
+		stationBlocks = eval("station" + str(self.stationnumber) + "Blocks")
 		if self.stationnumber is not 1:
 			while True:
 				#print ("i'm trying to read a card!")
@@ -146,15 +165,13 @@ class StationBrain(object):
 							check_uid = True
 							try_read = True
 							print("new card detected; reading parameters")
-							continue
-							#self.readRGB(uid)
-							#self.feedback.jumpToRGB()
-							#self.readFromCard(uid)
-							continue
-						self.cardwriter.writeToCard(uid)
+							self.readRGB(uid)
+							self.feedback.jumpToRGB()
+							self.readFromCard(uid)
+						self.cardwriter.writeToCard(uid, stationParameters, stationBlocks)
 					elif try_read is True:
 						self.readRGB(uid)
-						if self.feedback.status == True:
+						if self.feedback.status:
 							self.feedback.jumpToRGB()
 						else:
 							self.feedback.up()
@@ -173,21 +190,23 @@ class StationBrain(object):
 				time.sleep(.5)
 		else:
 			write_RGB = True
+			init = False
 			while True:
 				uid = pn532.read_passive_target()
 				if uid is not None:
+					if init is False:
+						self.cardwriter.writeInit(uid)
+						init = True
 					#print uid
 					tmp_timeout = timeout_delay
-					#print("i'm connected to the card, and there will be a light on.")								
-					if write_RGB == False:
-						continue
-					elif write_RGB == True:
+					#print("i'm connected to the card, and there will be a light on.")
+					if write_RGB:
 						stringRGB = self.feedback.generateRGB()
 						self.cardwriter.writeRGB(uid, stringRGB)
-						if self.feedback.status is True:
+						if self.feedback.status:
 							self.feedback.jumpToRGB()
 						write_RGB = False
-					self.cardwriter.writeToCard(uid)
+					self.cardwriter.writeToCard(uid, stationParameters, stationBlocks)
 					if self.feedback.status is False and pn532.read_passive_target():
 						self.feedback.up()
 					#print write_RGB
@@ -205,7 +224,7 @@ class StationBrain(object):
 					write_RGB = True
 					tmp_timeout = timeout_delay
 				time.sleep(.5)
-	
+	'''	
 	def readFromCard(self, uid):
 		global parameters, sortedParameterKeys
 		i = 0
@@ -224,12 +243,68 @@ class StationBrain(object):
 				tmpdict[key] = float(tmpdata)
 				#libpd_float(key, float(tmpdata))
 			i += 1
+		print("reading")
+		print(tmpdict)
 		for i in range (0, 10):
 			for key in tmpdict:
 				delta = parameters[key] - tmpdict[key]
 				parameters[key] -= delta / 10
 				libpd_float(key, float(parameters[key]))
 				time.sleep(.01)
+	'''
+	def readFromCard(self, uid):
+		global parameters, sortedParameterKeys, station1Parameters, station1Blocks, station2Parameters, station2Blocks, station3Parameters, station3Blocks, station4Parameters, station4Blocks, station5Parameters, station5Blocks, station6Parameters, station6Blocks
+		station = 1
+		#tmpdict = {}
+		while station <= 6:		
+			stationParameters = eval("station" + str(station) + "Parameters")
+			stationBlocks = eval("station" + str(station) + "Blocks")			
+			i = 0
+			j = 0
+			tmpdata = ''
+			while i < len(stationBlocks):
+				authenticated = pn532.mifare_classic_authenticate_block(uid, stationBlocks[i], PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
+				tmpdata += pn532.mifare_classic_read_block(stationBlocks[i]).split('#')[0]
+				#print tmpdata
+				i += 1
+			for param in stationParameters:
+				#print param
+				parameters[param] = float(tmpdata[j*4:(j+1)*4])
+				j += 1
+			station += 1
+		#print tmpdict
+		#parameters = tmpdict
+		#print parameters
+		libpd_float(param, float(parameters[param]))
+		'''
+		for i in range (0, 10):
+			for param in parameters:
+				if tmpdict[param]:
+					delta = parameters[param] - (parameters[param] - tmpdict[param])
+					parameters.update(param=delta)
+					libpd_float(param, float(parameters[param]))
+				time.sleep(.01)
+		i = 0
+		tmpdict = {}
+		tmpdata = ''
+		tmpvalue = ''
+		while i < 9:
+			sector = int(floor(i/3))
+			block = i % 3
+			computedblock = ((sector+1)*4) + block
+			authenticated = pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
+			tmpdata = pn532.mifare_classic_read_block(computedblock).split('#')[0]
+			if tmpdata is None:
+				print(('Failed to read block {0}!'.format(computedblock)))
+				break
+			else:
+				for j in range(0, len(tmpdata) // 4):
+					tmpvalue = tmpdata[(j*4):((j*4)+4)]
+					tmpdict[param] = float(tmpvalue)
+					print(tmpdict[param])
+			i += 1
+
+		'''
 
 	def readRGB(self, uid):
 		global R, G, B, RGB_BLOCK
@@ -240,33 +315,54 @@ class StationBrain(object):
 			R = float(tmpdata[0:4])
 			G = float(tmpdata[4:8])
 			B = float(tmpdata[8:12])
-		#print('i just read {0}, {1}, {2}'.format(R, G, B))			
+		#print('i just read {0}, {1}, {2}'.format(R, G, B))
+
 
 class StationCardWriter(object):
-	def __init__(self):
-		thread = threading.Thread(target=self.run, args=())
-		thread.daemon = True
-		thread.start()
-	
-	def run(self):
-		while True:
-			time.sleep(1)
 
-	def writeToCard(self, uid):
+	def writeToCard(self, uid, stationParameters, stationBlocks):
 		global parameters, sortedParameterKeys
 		i = 0
-		for key in sortedParameterKeys:
-			sector = int(floor(i/3))
-			block = i % 3
-			computedblock = ((sector+1)*4) + block
-			writedata = str(round(parameters[key], 14)).ljust(16,'#')
-			#print writedata
-			#time.sleep(.1)
-			pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
-			if not pn532.mifare_classic_write_block(computedblock, writedata):
-				print('Error! Failed to write to block {0}.'.format(computedblock))
-				break
+		writedata = ''
+		print("writing")
+		for param in stationParameters:
+			writedata += "{0:.2f}".format(parameters[param])
+		writedata = writedata.ljust(16, "#")
+		while i < (len(writedata) // 16):
+			writeblock =  writedata[(i*16):((i+1)*16)]
+			#print stationBlocks[i]	
+			pn532.mifare_classic_authenticate_block(uid, stationBlocks[i], PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
+			if not pn532.mifare_classic_write_block(stationBlocks[i], writeblock):
+				print('Error! Failed to write to block {0}.'.format(stationBlocks[i]))
 			i += 1
+
+	def writeInit(self, uid):
+		global parameters, sortedParameterKeys, station1Parameters, station1Blocks, station2Parameters, station2Blocks, station3Parameters, station3Blocks, station4Parameters, station4Blocks, station5Parameters, station5Blocks, station6Parameters, station6Blocks
+		station = 1
+		while station <= 6:
+			writedata = ''
+			i = 0		
+			#print station
+			stationParameters = eval("station" + str(station) + "Parameters")
+			#print stationParameters
+			stationBlocks = eval("station" + str(station) + "Blocks")			
+			#block = stationBlocks[i]
+			print("writing")
+			for param in stationParameters:
+				writedata += "{0:.2f}".format(parameters[param])
+			writedata = writedata.ljust(16, "#")
+			while i < (len(writedata) // 16):
+				writeblock =  writedata[(i*16):((i+1)*16)]
+				#print stationBlocks[i]	
+				pn532.mifare_classic_authenticate_block(uid, stationBlocks[i], PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
+				if not pn532.mifare_classic_write_block(stationBlocks[i], writeblock):
+					print('Error! Failed to write to block {0}.'.format(stationBlocks[i]))
+				i += 1
+			#writedata = writedata.ljust(16, "#")
+			#print writedata
+
+			writedata = ''
+			station += 1
 
 	def writeRGB(self, uid, RGB):
 		global RGB_BLOCK
@@ -290,13 +386,6 @@ class StationFeedback(object):
 		self.BLUEStatus.start(0)
 		self.status = False
 		self.RGB = ''
-		thread = threading.Thread(target=self.run, args=())
-		thread.daemon = True
-		thread.start()
-
-	def run(self):
-		while True:
-			time.sleep(1)
 
 	def up(self):
 		global VOLUME_MULTIPLIER, R, G, B

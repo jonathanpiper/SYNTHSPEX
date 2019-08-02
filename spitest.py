@@ -1,15 +1,7 @@
-import board
-import busio
-from digitalio import DigitalInOut
+import Adafruit_PN532 as PN532
 from mpmath import *
 import time
-#
-# NOTE: pick the import that matches the interface being used
-#
-from adafruit_pn532.adafruit_pn532 import MIFARE_CMD_AUTH_B
-#from adafruit_pn532.i2c import PN532_I2C
-from adafruit_pn532.spi import PN532_SPI
-#from adafruit_pn532.uart import PN532_UART
+
 
 # I2C connection:
 #i2c = busio.I2C(board.SCL, board.SDA)
@@ -26,18 +18,16 @@ from adafruit_pn532.spi import PN532_SPI
 #pn532 = PN532_I2C(i2c, debug=False, reset=reset_pin, req=req_pin)
 
 # SPI connection:
-spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-cs_pin = DigitalInOut(board.D8)
-pn532 = PN532_SPI(spi, cs_pin, debug=False)
+pn532 = PN532.PN532(24, 23, 19, 21)
+pn532.begin()
+pn532.SAM_configuration()
 
 # UART connection
 #uart = busio.UART(board.TX, board.RX, baudrate=115200, timeout=100)
-#pn532 = PN532_UART(uart, debug=False)
-
-# Configure PN532 to communicate with MiFare cards
-pn532.SAM_configuration()
 
 parameters = {
+	'freq' : 1.00,
+	'amp' : 1.00,
 	'H01' : 1.00,
 	'H02' : 0.60,
 	'H03' : 0.00,
@@ -75,26 +65,26 @@ key = b'\xFF\xFF\xFF\xFF\xFF\xFF'
 
 while True:
     # Check if a card is available to read
-    uid = pn532.read_passive_target(timeout=0.5)
-    print('.', end="")
+    uid = pn532.read_passive_target()
+    #print('.', end="")
     # Try again if no card is available.
     if uid is not None:
         break
-
-print("")
 
 i = 0
 for param in sortedParameterKeys:
     sector = int(floor(i/3))
     block = i % 3
     computedblock = ((sector+1)*4) + block
-    authenticated = pn532.mifare_classic_authenticate_block(uid, 4, MIFARE_CMD_AUTH_B, key)
+    authenticated = pn532.mifare_classic_authenticate_block(uid, computedblock, PN532.MIFARE_CMD_AUTH_B, key)
     tmpdata = pn532.mifare_classic_read_block(computedblock)
     if tmpdata is None:
         print(('Failed to read block {0}!'.format(computedblock)))
         break
     else:
-        parameters[param] = tmpdata[:tmpdata.find(b"#")]
-    print(int(round(time.time() * 1000)))
+		print tmpdata
+		i += 1
+        #parameters[param] = tmpdata[:tmpdata.find(b"#")]
+    #print(int(round(time.time() * 1000)))
 
 print(parameters)
