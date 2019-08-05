@@ -76,7 +76,6 @@ parameters = {
 	'reverbDecay' : 0.00,
 	'reverbMix' : 0.00,
 }
-sortedParameterKeys = sorted(parameters)
 
 station1Parameters = [	'freq', 'amp' ]
 station1Blocks = [ 4 ]
@@ -226,7 +225,7 @@ class StationBrain(object):
 				time.sleep(.5)
 	'''	
 	def readFromCard(self, uid):
-		global parameters, sortedParameterKeys
+		global parameters
 		i = 0
 		tmpdict = {}
 		for key in sortedParameterKeys:
@@ -253,7 +252,7 @@ class StationBrain(object):
 				time.sleep(.01)
 	'''
 	def readFromCard(self, uid):
-		global parameters, sortedParameterKeys, station1Parameters, station1Blocks, station2Parameters, station2Blocks, station3Parameters, station3Blocks, station4Parameters, station4Blocks, station5Parameters, station5Blocks, station6Parameters, station6Blocks
+		global parameters, station1Parameters, station1Blocks, station2Parameters, station2Blocks, station3Parameters, station3Blocks, station4Parameters, station4Blocks, station5Parameters, station5Blocks, station6Parameters, station6Blocks
 		station = 1
 		#tmpdict = {}
 		while station <= 6:		
@@ -321,7 +320,7 @@ class StationBrain(object):
 class StationCardWriter(object):
 
 	def writeToCard(self, uid, stationParameters, stationBlocks):
-		global parameters, sortedParameterKeys
+		global parameters
 		i = 0
 		writedata = ''
 		print("writing")
@@ -330,14 +329,15 @@ class StationCardWriter(object):
 		writedata = writedata.ljust(16, "#")
 		while i < (len(writedata) // 16):
 			writeblock =  writedata[(i*16):((i+1)*16)]
-			#print stationBlocks[i]	
+			print writeblock
+			print stationBlocks[i]	
 			pn532.mifare_classic_authenticate_block(uid, stationBlocks[i], PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
 			if not pn532.mifare_classic_write_block(stationBlocks[i], writeblock):
 				print('Error! Failed to write to block {0}.'.format(stationBlocks[i]))
 			i += 1
 
 	def writeInit(self, uid):
-		global parameters, sortedParameterKeys, station1Parameters, station1Blocks, station2Parameters, station2Blocks, station3Parameters, station3Blocks, station4Parameters, station4Blocks, station5Parameters, station5Blocks, station6Parameters, station6Blocks
+		global parameters, station1Parameters, station1Blocks, station2Parameters, station2Blocks, station3Parameters, station3Blocks, station4Parameters, station4Blocks, station5Parameters, station5Blocks, station6Parameters, station6Blocks
 		station = 1
 		while station <= 6:
 			writedata = ''
