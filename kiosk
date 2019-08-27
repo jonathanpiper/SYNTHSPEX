@@ -1,0 +1,122 @@
+from pylibpd import *
+import time
+import RPi.GPIO as GPIO
+import signal
+import threading
+import os
+import sys
+sys.path.append(os.path.abspath("/home/pi/"))
+from synthlibrary_g import *
+
+#Important variables are being set here. 
+STATION_NUMBER = int(sys.argv[1])
+print("Station {0} is active!".format(STATION_NUMBER))
+ALIVE = True
+
+if STATION_NUMBER == 1:
+	PATCH = 'SynthExhibit1-Waveforms18.pd'
+else:
+	PATCH = 'SynthEngine36.pd'
+
+signal.signal(signal.SIGINT, end_read)
+
+#Set up GPIO.
+GPIO.setwarnings(False)
+GPIObuttonpins = [18]
+
+def button_push(button):
+	if button is not 0:
+		print ('You triggered a note! {0}'.format(button))
+		libpd_bang('pynote')
+	return
+
+for button in GPIObuttonpins:
+	GPIO.setmode(GPIO.BOARD)
+	GPIO.setup(button,GPIO.IN,pull_up_down=GPIO.PUD_UP)
+	GPIO.add_event_detect(button, GPIO.BOTH, callback=button_push, bouncetime=50)
+
+#Set up PD Wrapper.
+libpd_open_patch(PATCH, '/home/pi/')
+
+#Define all analog inputs here. GetAnalogInput takes 4 arguments:
+#Pin number 0-7 (or 0-15 for Stations with second MCP3008).
+#Name of PD Receive object. Upper limit of input range. Optional debug flag to print values to console.
+
+if STATION_NUMBER == 1:
+	libpd_subscribe('freq')
+	libpd_subscribe('amp')
+	inputFreq = GetAnalogInput(1, "freq")
+	inputAmp = GetAnalogInput(0, "amp")	
+elif STATION_NUMBER == 2:
+	libpd_subscribe('H01')
+	libpd_subscribe('H02')
+	libpd_subscribe('H03')
+	libpd_subscribe('H04')
+	libpd_subscribe('H05')
+	libpd_subscribe('H06')
+	libpd_subscribe('H07')
+	libpd_subscribe('H08')
+	inputH01 = GetAnalogInput(1, "H01")
+	inputH02 = GetAnalogInput(0, "H02")
+	inputH03 = GetAnalogInput(3, "H03")
+	inputH04 = GetAnalogInput(2, "H04")
+	inputH05 = GetAnalogInput(5, "H05")
+	inputH06 = GetAnalogInput(4, "H06")
+	inputH07 = GetAnalogInput(7, "H07")
+	inputH08 = GetAnalogInput(6, "H08")
+elif STATION_NUMBER == 3:
+	libpd_subscribe('centerFreq')
+	libpd_subscribe('Q')
+	inputCenterFrequency = GetAnalogInput(1, "centerFreq")
+	inputQuality = GetAnalogInput(1, "Q")
+elif STATION_NUMBER == 4:
+	libpd_subscribe('attack')
+	libpd_subscribe('release')
+	inputAttack = GetAnalogInput(1, "attack")
+	inputRelease = GetAnalogInput(0, "release")
+elif STATION_NUMBER == 5:
+	libpd_subscribe('LFOAmpRate')
+	libpd_subscribe('LFOAmpDepth')
+	libpd_subscribe('LFOPitchRate')
+	libpd_subscribe('LFOPitchDepth')
+	inputLFOAmpRate = GetAnalogInput(1, "LFOAmpRate", debug=False)
+	inputLFOAmpDepth = GetAnalogInput(0, "LFOAmpDepth", debug=False)
+	inputLFOPitchRate = GetAnalogInput(3, "LFOPitchRate", debug=False)
+	inputLFOPitchDepth = GetAnalogInput(2, "LFOPitchDepth", debug=False)
+elif STATION_NUMBER == 6:
+	libpd_subscribe('reverbDecay')
+	libpd_subscribe('reverbMix')
+	inputreverbDecay = GetAnalogInput(1, "reverbDecay")
+	inputreverbMix = GetAnalogInput(0, "reverbMix")
+elif STATION_NUMBER == 7:
+	pass
+
+#Define the classes that control the Station.
+#StationFeedback handles visual feedback. Optional first argument defines number of Status LED.
+#Status LED pin defaults to 29.
+#CardWriter handles the functionality of writing to the RFID card. This is split out to a
+#separate subprocess because it is running nearly constantly.
+#StationBrain handles initialization, first communication with the RFID reader, and up/down 
+#volume and Status LED controls. StationBrain accepts three arguments:
+#Nonoptional int stationnumber to control functionality needed by specific stations.
+#Optional StationFeedback() instance, defaults to "Feedback."
+#Optional StationCardWriter() instance, defaults to "CardWriter."
+Feedback = StationFeedback()
+CardWriter = StationCardWriter()
+Station = StationBrain(STATION_NUMBER, Feedback, CardWriter)
+
+while ALIVE == True:
+	# we have run out of things to play, so queue up another buffer of data from Pd
+	if not ch.get_queue():
+		# make sure we fill the whole buffer
+		for x in range(BUFFERSIZE):
+			# let's grab a new block from Pd each time we're out of BLOCKSIZE data
+			if x % BLOCKSIZE == 0:
+				outbuf = m.process(inbuf)
+			# de-interlace the data coming from libpd
+			samples[selector][x][0] = outbuf[(x % BLOCKSIZE) * 2]
+			samples[selector][x][1] = outbuf[(x % BLOCKSIZE) * 2 + 1]
+		# queue up the buffer we just filled to be played by pygame
+		ch.queue(sounds[selector])
+		# next time we'll do the other buffer
+		selector = int(not selector)
