@@ -12,29 +12,37 @@ from synthlibrary import *
 STATION_NUMBER = int(sys.argv[1])
 print("Station {0} is active!".format(STATION_NUMBER))
 ALIVE = True
-PATCH = 'SynthEngine15.pd'
+
+if STATION_NUMBER == 1:
+	PATCH = 'SynthExhibit1-Waveforms23.pd'
+else:
+	PATCH = 'SynthEngine54.pd'
 
 signal.signal(signal.SIGINT, end_read)
 
 #Set up GPIO.
 GPIO.setwarnings(False)
-GPIObuttonpins = [16]
+GPIObuttonpins = [18]
 
 def button_push(button):
-	if button == 16:
-		print ('You triggered a note!')
-		libpd_bang('pyin_play')
+	if button is not 0:
+		print ('A note was triggered!')
+		libpd_bang('pynote')
 	return
 
 for button in GPIObuttonpins:
+	GPIO.setmode(GPIO.BOARD)
 	GPIO.setup(button,GPIO.IN,pull_up_down=GPIO.PUD_UP)
-	GPIO.add_event_detect(button, GPIO.FALLING, callback=button_push, bouncetime=300)
+	GPIO.add_event_detect(button, GPIO.BOTH, callback=button_push, bouncetime=18)
 
 #Set up PD Wrapper.
-libpd_open_patch(PATCH, '.')
+libpd_open_patch(PATCH, '/home/pi/RTM/')
 
 if STATION_NUMBER == 1:
-	pass
+	libpd_subscribe('freq')
+	libpd_subscribe('amp')
+	inputFreq = GetDigitalInput(40, "freq", True)
+	inputAmp = GetDigitalInput(36, "amp", True)	
 elif STATION_NUMBER == 2:
 	libpd_subscribe('H01')
 	libpd_subscribe('H02')
@@ -44,49 +52,38 @@ elif STATION_NUMBER == 2:
 	libpd_subscribe('H06')
 	libpd_subscribe('H07')
 	libpd_subscribe('H08')
-	libpd_subscribe('H09')
-	libpd_subscribe('H10')
-	libpd_subscribe('H11')
-	libpd_subscribe('H12')
-	libpd_subscribe('H13')
-	libpd_subscribe('H14')
-	libpd_subscribe('H15')
-	libpd_subscribe('H16')
-	inputH01 = GetAnalogInput(0, "H01", 1)
-	inputH02 = GetAnalogInput(1, "H02", 1)
-	inputH03 = GetAnalogInput(2, "H03", 1)
-	inputH04 = GetAnalogInput(3, "H04", 1)
-	inputH05 = GetAnalogInput(4, "H05", 1)
-	inputH06 = GetAnalogInput(5, "H06", 1)
-	inputH07 = GetAnalogInput(6, "H07", 1)
-	inputH08 = GetAnalogInput(7, "H08", 1)
-	inputH09 = GetAnalogInput(8, "H09", 1)
+	inputH01 = GetAnalogInput(0, "H01")
+	inputH02 = GetAnalogInput(1, "H02")
+	inputH03 = GetAnalogInput(2, "H03")
+	inputH04 = GetAnalogInput(3, "H04")
+	inputH05 = GetAnalogInput(4, "H05")
+	inputH06 = GetAnalogInput(5, "H06")
+	inputH07 = GetAnalogInput(6, "H07")
+	inputH08 = GetAnalogInput(7, "H08")
 elif STATION_NUMBER == 3:
 	libpd_subscribe('centerFreq')
 	libpd_subscribe('Q')
-	inputCenterFrequency = GetAnalogInput(0, "centerFreq", 1)
-	inputQuality = GetAnalogInput(1, "Q", 1)
+	inputCenterFrequency = GetAnalogInput(0, "centerFreq")
+	inputQuality = GetAnalogInput(1, "Q")
 elif STATION_NUMBER == 4:
 	libpd_subscribe('attack')
-	libpd_subscribe('sustain')
 	libpd_subscribe('release')
-	inputAttack = GetAnalogInput(0, "attack", 1)
-	inputSustain = GetAnalogInput(1, "sustain", 1)
-	inputRelease = GetAnalogInput(2, "release", 1)
+	inputAttack = GetAnalogInput(0, "attack")
+	inputRelease = GetAnalogInput(1, "release")
 elif STATION_NUMBER == 5:
 	libpd_subscribe('LFOAmpRate')
 	libpd_subscribe('LFOAmpDepth')
 	libpd_subscribe('LFOPitchRate')
 	libpd_subscribe('LFOPitchDepth')
-	inputLFOAmpRate = GetAnalogInput(0, "LFOAmpRate", 1)
-	inputLFOAmpDepth = GetAnalogInput(1, "LFOAmpDepth", 1)
-	inputLFOPitchRate = GetAnalogInput(2, "LFOPitchRate", 1)
-	inputLFOPitchDepth = GetAnalogInput(3, "LFOPitchDepth", 1)
+	inputLFOAmpRate = GetAnalogInput(0, "LFOAmpRate")
+	inputLFOAmpDepth = GetAnalogInput(1, "LFOAmpDepth")
+	inputLFOPitchRate = GetAnalogInput(2, "LFOPitchRate")
+	inputLFOPitchDepth = GetAnalogInput(3, "LFOPitchDepth")
 elif STATION_NUMBER == 6:
 	libpd_subscribe('reverbDecay')
 	libpd_subscribe('reverbMix')
-	inputreverbDecay = GetAnalogInput(0, "reverbDecay", 1)
-	inputreverbMix = GetAnalogInput(1, "reverbMix", 1)
+	inputreverbDecay = GetAnalogInput(0, "reverbDecay")
+	inputreverbMix = GetAnalogInput(1, "reverbMix")
 elif STATION_NUMBER == 7:
 	pass
 
@@ -100,7 +97,7 @@ elif STATION_NUMBER == 7:
 #Nonoptional int stationnumber to control functionality needed by specific stations.
 #Optional StationFeedback() instance, defaults to "Feedback."
 #Optional StationCardWriter() instance, defaults to "CardWriter."
-Feedback = StationFeedback()
+Feedback = StationFeedback(29, 31, 33)
 CardWriter = StationCardWriter()
 Station = StationBrain(STATION_NUMBER, Feedback, CardWriter)
 
