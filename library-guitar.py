@@ -1,4 +1,4 @@
-#11/06 11:00pm
+#10/23 3:06pm
 
 import pyaudio
 from pylibpd import *
@@ -114,57 +114,10 @@ pn532.SAM_configuration()
 
 CARD_KEY = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 
-class GetDigitalInput(object):
-    def __init__(self, clk, control, debug=False):
-        global parameters
-        self.clk = clk
-        if self.clk == 40:
-            self.dt = 32
-        elif self.clk == 36:
-            self.dt = 38
-        GPIO.setup(self.clk, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        GPIO.setup(self.dt, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        self.debug = debug
-        self.control = control
-        self.counter = parameters[self.control]
-        self.clkLastState = GPIO.input(self.clk)
-        GPIO.add_event_detect(self.clk, GPIO.RISING, callback=self.rotation_decode, bouncetime=2)
-        #print self.value
-        thread = threading.Thread(target=self.run, args=())
-        thread.daemon = True
-        thread.start()
-
-    def rotation_decode(self, clk):
-        global parameters
-        self.clkState = GPIO.input(self.clk)
-        self.dtState = GPIO.input(self.dt)
-        if self.clkState != self.clkLastState:
-            if (self.dtState != self.clkState) and (self.counter < 1):
-                self.counter += .04
-                if self.counter > 1:
-                    self.counter = 1
-            elif self.counter > 0:
-                self.counter -= .04
-                if self.counter < 0:
-                    self.counter = 0
-        self.clkLastState = self.clkState
-        self.counter = abs(self.counter)
-        if self.debug:
-            print("Input '{0}' has value {1}".format(self.control, self.counter))
-        parameters[self.control] = "{:.2f}".format(self.counter)
-        libpd_float(self.control, float(self.counter))
-
-    def run(self):
-        while True:
-            time.sleep(1)
-
 class GetAnalogInput(object):
     #min and max is to scale the value as the slider all the way down returns a value that is not close to 0.
     def __init__(self, pin, control, debug=False):
-        if control[0:2] == "H0":
-            self.INVERT = False
-        else:
-            self.INVERT = True
+        global STATION_NUMBER
         if pin < 8:
             self.pin = pin
             self.CS = CS[0]
@@ -177,7 +130,7 @@ class GetAnalogInput(object):
         # self.scale = scale
         self.debug = debug
         self.value = 0
-        if self.INVERT is False:
+        if STATION_NUMBER == 2:
             self.value = round(root(fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000), 1.2), 2)
         else:
             self.value = round(1 - root(fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000), 1.2), 2)
@@ -192,7 +145,7 @@ class GetAnalogInput(object):
         thread.start()
 
     def run(self):
-        global parameters
+        global parameters, STATION_NUMBER
         top = 3
         compare = False
         lastValue = self.value
@@ -201,7 +154,7 @@ class GetAnalogInput(object):
             tmpValue = 0
             while i < top: 
                 # print(fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000))
-                if self.INVERT is False:
+                if STATION_NUMBER == 2:
                     newValue = round(root(fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000), 1.2), 2)
                 else:
                     newValue = round(1 - root(fdiv(readadc(self.pin, CLK, MOSI, MISO, self.CS), 1024.000), 1.2), 2)
@@ -349,10 +302,7 @@ class StationBrain(object):
                 #print tmpdata[j*4:(j+1)*4]
                 if tmpdata[j*4:(j+1)*4] == '':
                     break
-                try:
-                    parameters[param] = float(tmpdata[j*4:(j+1)*4])
-                except:
-                    print("Error parsing parameter " + param + ". Read" + str(tmpdata[j*4:(j+1)*4]))
+                parameters[param] = float(tmpdata[j*4:(j+1)*4])
                 j += 1
                 libpd_float(param, float(parameters[param]))
             station += 1
@@ -371,7 +321,7 @@ class StationBrain(object):
 class StationCardWriter(object):
 
     def writeToCard(self, uid, stationParameters, stationBlocks):
-        global parameters, pn532
+        global parameters
         i = 0
         writedata = ''
         for param in stationParameters:
@@ -383,15 +333,10 @@ class StationCardWriter(object):
             #print writeblock
             #print stationBlocks[i]
             pn532.mifare_classic_authenticate_block(uid, stationBlocks[i], PN532.MIFARE_CMD_AUTH_B, CARD_KEY)
-            try:
-                pn532.mifare_classic_write_block(stationBlocks[i], writeblock)
-                print('Successfully wrote {0} to Block {1} at {2}'.format(writeblock, stationBlocks[i], datetime.datetime.now().strftime("%H:%M:%S")))
-            except Exception as e:
+            if not pn532.mifare_classic_write_block(stationBlocks[i], writeblock):
                 print('Error! Failed to write to block {0}.'.format(stationBlocks[i]))
-                print(e)
-                #pn532 = PN532.PN532(24, 23, 19, 21)
-                #pn532.begin()
-                #pn532.SAM_configuration()
+            else:
+                print('Successfully wrote {0} to Block {1} at {2}'.format(writeblock, stationBlocks[i], datetime.datetime.now().strftime("%H:%M:%S")))
             i += 1
 
     def writeInit(self, uid):
@@ -447,7 +392,6 @@ class StationFeedback(object):
 
     def up(self):
         global VOLUME_MULTIPLIER, R, G, B, STATION_NUMBER
-        libpd_bang('noteKill')
         if str(STATION_NUMBER).isdigit() is False:
             G = G / 8
             B = B / 8

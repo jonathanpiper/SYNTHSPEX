@@ -63,13 +63,13 @@ elif STATION_NUMBER == 2:
 elif STATION_NUMBER == 3:
 	libpd_subscribe('centerFreq')
 	libpd_subscribe('Q')
-	inputCenterFrequency = GetAnalogInput(0, "centerFreq")
-	inputQuality = GetAnalogInput(1, "Q")
+	inputCenterFrequency = GetDigitalInput(40, "centerFreq")
+	inputQuality = GetDigitalInput(36, "Q")
 elif STATION_NUMBER == 4:
 	libpd_subscribe('attack')
 	libpd_subscribe('release')
-	inputAttack = GetAnalogInput(0, "attack")
-	inputRelease = GetAnalogInput(1, "release")
+	inputAttack = GetDigitalInput(40, "attack")
+	inputRelease = GetDigitalInput(36, "release")
 elif STATION_NUMBER == 5:
 	libpd_subscribe('LFOAmpRate')
 	libpd_subscribe('LFOAmpDepth')
